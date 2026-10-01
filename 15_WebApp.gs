@@ -2,14 +2,41 @@
  * 15_WebApp.gs — 웹앱 진입점 (제어판 + 대시보드)
  * 배포(배포 > 새 배포 > 웹 앱) 후 발급되는 /exec URL로 접속하는 외부 웹페이지.
  * ?page=dashboard 쿼리로 대시보드, 그 외(기본값)는 제어판(수집 실행 버튼)을 보여준다.
+ *
+ * ?action=... 쿼리가 있으면 HTML 대신 JSON API로 응답한다(사용자 요청 2026-10: Vercel에 올리는
+ * 정적 페이지가 google.script.run 대신 fetch()로 이 Apps Script를 백엔드 삼아 호출하기 위함).
+ * 배포 접근권한이 "모든 사용자"여야 로그인 없는 방문자의 fetch 요청도 통과한다.
  */
 function doGet(e) {
+  const action = e && e.parameter && e.parameter.action;
+  if (action) return handleApiGet_(action);
+
   const page = (e && e.parameter && e.parameter.page) || 'index';
   const file = page === 'dashboard' ? 'Dashboard' : 'Index';
   return HtmlService.createTemplateFromFile(file).evaluate()
     .setTitle('언론보도 모니터링')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/** JSON API 분기. action=status|dashboard|collect. 항상 {ok, data|error} 형태로 응답한다. */
+function handleApiGet_(action) {
+  let payload;
+  try {
+    if (action === 'status') {
+      payload = { ok: true, data: getStatusForWeb_() };
+    } else if (action === 'dashboard') {
+      payload = { ok: true, data: getDashboardData_() };
+    } else if (action === 'collect') {
+      payload = { ok: true, data: runCollectionFromWeb_() };
+    } else {
+      payload = { ok: false, error: '알 수 없는 action: ' + action };
+    }
+  } catch (err) {
+    payload = { ok: false, error: String((err && err.message) || err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /** 웹 제어판의 "지금 수집 실행" 버튼에서 호출. shouldRunNow_ 스로틀을 무시하고 즉시 1회 수집한다. */
