@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --blue: #1a73e8;
+      --blue-dark: #1557b0;
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --text: #202124;
+      --muted: #5f6368;
+      --border: #e3e6ea;
+      --green: #1e8e3e;
+      --red: #d93025;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px 16px 60px;
+    }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    h1 {
+      font-size: 19px;
+      margin: 4px 0 20px;
+      text-align: center;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      text-align: center;
+    }
+    .status-grid .num { font-size: 22px; font-weight: 700; color: var(--blue); }
+    .status-grid .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .run-btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      background: var(--blue);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .run-btn:hover { background: var(--blue-dark); }
+    .run-btn:disabled { background: #9aa0a6; cursor: not-allowed; }
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: -3px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .result {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.6;
+      display: none;
+    }
+    .result.ok { background: #e6f4ea; color: var(--green); display: block; }
+    .result.err { background: #fce8e6; color: var(--red); display: block; }
+    .nav-link {
+      display: block;
+      text-align: center;
+      padding: 14px;
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .nav-link:hover { text-decoration: underline; }
+    .muted { color: var(--muted); font-size: 12px; text-align: center; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>언론보도 모니터링 제어판</h1>
+
+    <div class="card">
+      <div class="status-grid">
+        <div>
+          <div class="num" id="todayCount">—</div>
+          <div class="label">오늘 수집</div>
+        </div>
+        <div>
+          <div class="num" id="totalCount">—</div>
+          <div class="label">전체 누적</div>
+        </div>
+        <div>
+          <div class="num" id="lastCollectAt" style="font-size:13px;">—</div>
+          <div class="label">마지막 수집</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <button class="run-btn" id="runBtn" onclick="runCollection()">
+        <span class="spinner" id="spinner"></span><span id="runBtnLabel">지금 수집 실행</span>
+      </button>
+      <div class="result" id="result"></div>
+      <div class="muted">버튼을 누르면 네이버 뉴스·RSS 수집과 위기 판정이 즉시 1회 실행됩니다. 완료까지 수십 초~2분 정도 걸릴 수 있어요.</div>
+    </div>
+
+    <a class="nav-link" href="?page=dashboard">대시보드 보기 →</a>
+  </div>
+
+  <script>
+    function loadStatus() {
+      google.script.run.withSuccessHandler(function (s) {
+        document.getElementById('todayCount').textContent = s.todayCount;
+        document.getElementById('totalCount').textContent = s.totalCount;
+        document.getElementById('lastCollectAt').textContent = s.lastCollectAt;
+      }).getStatusForWeb_();
+    }
+
+    function runCollection() {
+      const btn = document.getElementById('runBtn');
+      const spinner = document.getElementById('spinner');
+      const label = document.getElementById('runBtnLabel');
+      const result = document.getElementById('result');
+      btn.disabled = true;
+      spinner.style.display = 'inline-block';
+      label.textContent = '수집 중...';
+      result.className = 'result';
+      result.textContent = '';
+
+      google.script.run
+        .withSuccessHandler(function (r) {
+          btn.disabled = false;
+          spinner.style.display = 'none';
+          label.textContent = '지금 수집 실행';
+          result.className = 'result ok';
+          result.textContent = '완료 — 신규 ' + r.savedCount + '건 저장 (' + Math.round(r.durationMs / 1000) + '초 소요, ' + r.finishedAt + ')';
+          loadStatus();
+        })
+        .withFailureHandler(function (err) {
+          btn.disabled = false;
+          spinner.style.display = 'none';
+          label.textContent = '지금 수집 실행';
+          result.className = 'result err';
+          result.textContent = '실패: ' + (err && err.message ? err.message : err);
+        })
+        .runCollectionFromWeb_();
+    }
+
+    loadStatus();
+  </script>
+</body>
+</html>
