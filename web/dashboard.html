@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>모니터링 대시보드</title>
+  <style>
+    :root {
+      --blue: #1a73e8;
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --text: #202124;
+      --muted: #5f6368;
+      --border: #e3e6ea;
+      --green: #1e8e3e;
+      --red: #d93025;
+      --orange: #f9ab00;
+      --grade-해당없음: #9aa0a6;
+      --grade-관심: #1a73e8;
+      --grade-주의: #f9ab00;
+      --grade-경계: #e8710a;
+      --grade-심각: #d93025;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px 16px 60px;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    h1 { font-size: 19px; margin: 0; }
+    .nav-link { color: var(--blue); text-decoration: none; font-weight: 600; font-size: 13px; }
+    .nav-link:hover { text-decoration: underline; }
+    .gen-at { font-size: 11px; color: var(--muted); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .card h2 {
+      font-size: 14px;
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+      gap: 10px;
+      text-align: center;
+    }
+    .kpi .num { font-size: 24px; font-weight: 700; color: var(--blue); }
+    .kpi .label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .bars { display: flex; align-items: flex-end; gap: 8px; height: 120px; }
+    .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+    .bar { width: 100%; max-width: 32px; background: var(--blue); border-radius: 4px 4px 0 0; min-height: 2px; }
+    .bar-label { font-size: 10px; color: var(--muted); margin-top: 4px; white-space: nowrap; }
+    .bar-count { font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+
+    .grade-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .grade-chip {
+      flex: 1; min-width: 80px;
+      padding: 10px; border-radius: 8px; text-align: center; color: #fff;
+    }
+    .grade-chip .n { font-size: 18px; font-weight: 700; }
+    .grade-chip .g { font-size: 11px; opacity: 0.9; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 11.5px; }
+    td.title a { color: var(--text); text-decoration: none; }
+    td.title a:hover { text-decoration: underline; }
+    .tbl-wrap { overflow-x: auto; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; color: #fff; white-space: nowrap;
+    }
+    .empty { color: var(--muted); font-size: 12.5px; padding: 8px 0; }
+    .refresh-btn {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--text);
+    }
+    .refresh-btn:hover { background: #f1f3f4; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>모니터링 대시보드</h1>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="gen-at" id="genAt"></span>
+        <button class="refresh-btn" onclick="load()">↻ 새로고침</button>
+        <a class="nav-link" href="index.html">← 제어판</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>핵심 지표</h2>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="num" id="kpiToday">—</div><div class="label">오늘 보도</div></div>
+        <div class="kpi"><div class="num" id="kpiTotal">—</div><div class="label">전체 누적</div></div>
+        <div class="kpi"><div class="num" id="kpiUnconfirmed">—</div><div class="label">미확인(누적)</div></div>
+        <div class="kpi"><div class="num" id="kpiOngoing">—</div><div class="label">진행중 위기</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>최근 7일 추이</h2>
+      <div class="bars" id="bars"></div>
+    </div>
+
+    <div class="card">
+      <h2>위기등급 분포(전체 누적)</h2>
+      <div class="grade-row" id="gradeRow"></div>
+    </div>
+
+    <div class="card">
+      <h2>진행 중 위기 이슈</h2>
+      <div class="tbl-wrap"><table id="ongoingTable"><thead><tr>
+        <th>등급</th><th>매체명</th><th>제목</th><th>대응상태</th>
+      </tr></thead><tbody></tbody></table></div>
+      <div class="empty" id="ongoingEmpty" style="display:none;">진행 중인 위기 이슈가 없습니다.</div>
+    </div>
+
+    <div class="card">
+      <h2>최근 7일 부정 보도</h2>
+      <div class="tbl-wrap"><table id="negTable"><thead><tr>
+        <th>보도일시</th><th>매체명</th><th>제목</th><th>상태</th><th>대응상태</th>
+      </tr></thead><tbody></tbody></table></div>
+      <div class="empty" id="negEmpty" style="display:none;">최근 7일 내 부정 보도가 없습니다.</div>
+    </div>
+
+    <div class="card">
+      <h2>최근 기사 30건</h2>
+      <div class="tbl-wrap"><table id="recentTable"><thead><tr>
+        <th>보도일시</th><th>매체명</th><th>제목</th><th>논조</th><th>위기등급</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script>
+    const GRADE_COLOR = {
+      '해당없음': 'var(--grade-해당없음)', '관심': 'var(--grade-관심)',
+      '주의': 'var(--grade-주의)', '경계': 'var(--grade-경계)', '심각': 'var(--grade-심각)'
+    };
+    const TONE_COLOR = { '긍정': '#1e8e3e', '중립': '#9aa0a6', '부정': '#d93025' };
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function titleCell(row) {
+      const t = escapeHtml(row.title);
+      return row.url ? '<a href="' + escapeHtml(row.url) + '" target="_blank" rel="noopener">' + t + '</a>' : t;
+    }
+
+    function badge(text, color) {
+      return '<span class="badge" style="background:' + color + ';">' + escapeHtml(text) + '</span>';
+    }
+
+    function render(d) {
+      document.getElementById('genAt').textContent = '기준 ' + d.generatedAt;
+      document.getElementById('kpiToday').textContent = d.todayCount;
+      document.getElementById('kpiTotal').textContent = d.totalCount;
+      document.getElementById('kpiUnconfirmed').textContent = d.unconfirmedCount;
+      document.getElementById('kpiOngoing').textContent = d.ongoingCrisis.length;
+
+      const maxCount = Math.max(1, ...d.last7.map(r => r.count));
+      document.getElementById('bars').innerHTML = d.last7.map(r =>
+        '<div class="bar-col">' +
+          '<div class="bar-count">' + r.count + '</div>' +
+          '<div class="bar" style="height:' + Math.max(4, Math.round(r.count / maxCount * 100)) + '%;"></div>' +
+          '<div class="bar-label">' + escapeHtml(r.date) + '</div>' +
+        '</div>'
+      ).join('');
+
+      const gradeOrder = ['심각', '경계', '주의', '관심', '해당없음'];
+      document.getElementById('gradeRow').innerHTML = gradeOrder.map(g =>
+        '<div class="grade-chip" style="background:' + GRADE_COLOR[g] + ';">' +
+          '<div class="n">' + (d.crisisCounts[g] || 0) + '</div><div class="g">' + g + '</div>' +
+        '</div>'
+      ).join('');
+
+      const ongoingBody = document.querySelector('#ongoingTable tbody');
+      ongoingBody.innerHTML = d.ongoingCrisis.map(r =>
+        '<tr><td>' + badge(r.grade, GRADE_COLOR[r.grade] || '#9aa0a6') + '</td>' +
+        '<td>' + escapeHtml(r.media) + '</td><td class="title">' + titleCell(r) + '</td>' +
+        '<td>' + escapeHtml(r.responseStatus) + '</td></tr>'
+      ).join('');
+      document.getElementById('ongoingEmpty').style.display = d.ongoingCrisis.length ? 'none' : 'block';
+
+      const negBody = document.querySelector('#negTable tbody');
+      negBody.innerHTML = d.negativeRecent.map(r =>
+        '<tr><td>' + escapeHtml(r.pubDate) + '</td><td>' + escapeHtml(r.media) + '</td>' +
+        '<td class="title">' + titleCell(r) + '</td><td>' + escapeHtml(r.status) + '</td>' +
+        '<td>' + escapeHtml(r.responseStatus) + '</td></tr>'
+      ).join('');
+      document.getElementById('negEmpty').style.display = d.negativeRecent.length ? 'none' : 'block';
+
+      const recentBody = document.querySelector('#recentTable tbody');
+      recentBody.innerHTML = d.recent.map(r =>
+        '<tr><td>' + escapeHtml(r.pubDate) + '</td><td>' + escapeHtml(r.media) + '</td>' +
+        '<td class="title">' + titleCell(r) + '</td>' +
+        '<td>' + badge(r.tone || '중립', TONE_COLOR[r.tone] || '#9aa0a6') + '</td>' +
+        '<td>' + badge(r.grade, GRADE_COLOR[r.grade] || '#9aa0a6') + '</td></tr>'
+      ).join('');
+    }
+
+    async function load() {
+      document.getElementById('genAt').textContent = '불러오는 중...';
+      try {
+        const res = await fetch(API_BASE + '?action=dashboard');
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error);
+        render(json.data);
+      } catch (err) {
+        document.getElementById('genAt').textContent = '로드 실패: ' + (err && err.message ? err.message : err);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
